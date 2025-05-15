@@ -1,0 +1,367 @@
+---
+title: "Final Project"
+author: "Rujia Xie"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(Hmisc)
+library(psych)
+library(corrplot)
+library(car)
+library("sandwich")
+library("lmtest")
+library(caret)
+```
+
+# 1. Exploratory Data Analysis
+
+```{r}
+#Load in data downloaded from Kaggle
+house_price <- read.csv("Boston-house-price-data.csv")
+names(house_price)
+```
+
+This is a dataset called "Boston-house-price-data," which contains information collected by the U.S Census Service concerning housing in the area of Boston Mass. Each observation in the Boston Housing dataset represents a single census tract (neighborhood) in the Boston area. The dataset includes various attributes describing the socioeconomic, environmental, and housing characteristics of these tracts, along with the median value of owner-occupied homes.
+
+All variables in the dataset in order are:
+
+- CRIM     per capita crime rate by town
+
+- ZN       proportion of residential land zoned for lots over 25,000 sq.ft.
+
+- INDUS    proportion of non-retail business acres per town
+
+- CHAS     Charles River dummy variable (= 1 if tract bounds river; 0 otherwise)
+
+- NOX      nitric oxides concentration (parts per 10 million)
+
+- RM       average number of rooms per dwelling
+
+- AGE      proportion of owner-occupied units built prior to 1940
+
+- DIS      weighted distances to five Boston employment centres
+
+- RAD      index of accessibility to radial highways
+
+- TAX      full-value property-tax rate per $10,000
+
+- PTRATIO  pupil-teacher ratio by town
+
+- B        1000(Bk - 0.63)^2 where Bk is the proportion of blacks by town
+
+- LSTAT    % lower status of the population
+
+- MEDV     Median value of owner-occupied homes in $1000's
+
+For this project, I will use MEDV as the target/outcome/dependent variable, and CRIM, RM, DIS, and RAD as the predictor/independent variables.
+
+## 1.1 Summary statistics of variables
+```{r}
+describe(house_price)
+```
+
+## 1.2 Visualization of distributions and relationships
+```{r}
+hist(house_price$MEDV, breaks = 30, main = "Histogram of Median Value of Homes")
+hist(house_price$CRIM, breaks = 30, main = "Histogram of Per Capita Crime Rate")
+hist(house_price$RM, breaks = 30, main = "Histogram of Rooms per Dwelling")
+hist(house_price$DIS, breaks = 30, main = "Histogram of Distance to Employment Centers")
+hist(house_price$RAD, breaks = 30, main = "Histogram of Accessibility to Highways")
+```
+
+In the following correlation matrix, a correlation coefficient was shown in each cell.A red filling in the cell indicated a negative correlation, and a blue filling indicated a positive correlation. The P value for each correlation was also calculated.Correlations with p>.05 were crossed out in the matrix.
+
+```{r}
+house_subset <- house_price [c(1, 6, 8, 9, 14)]
+house_correlation <-cor(house_subset, method="spearman", 
+                           use="pairwise.complete.obs")
+
+
+pmatrix <- cor.mtest(house_subset, conf.level = .95)
+corrplot(house_correlation, p.mat = pmatrix$p, sig.level = .05,
+         insig = "pch", pch.cex = 3, pch.col = "red", type = "lower",
+         method="color", addCoef.col = "black", number.cex = 1.2, 
+         tl.cex = 1.2, tl.srt = 45, tl.col = "black")
+```
+
+## 1.3 Identification of missing values and outliers
+```{r}
+sum(is.na(house_price))
+```
+
+## 1.4 Data cleaning and preprocessing steps
+
+```{r}
+house_price$CHAS <- factor(house_price$CHAS)
+```
+
+# 2. Regression Assumptions Verification
+
+```{r}
+# Run the fitted linear regression model
+house_model <- lm(MEDV ~ CRIM + RM + DIS + RAD,
+           data = house_price)
+summary(house_model)
+```
+
+## 2.1 Linearity assessment
+```{r}
+plot(house_model$fitted.values, house_price$MEDV,
+     xlab = "fitted values", ylab = "observed values")
+abline(a = 0, b = 1, col = "red")
+```
+
+Majority of the observations follow a linear trend.
+
+
+## 2.2 Normality of residuals
+```{r}
+qqnorm(house_model$residuals)
+qqline(house_model$residuals, col = "red")
+```
+
+Residuals of most observations follow a normal distribution, although outliers are present at both ends.
+
+
+## 2.3 Check homoscedasticity (constant variance of residuals)
+```{r}
+par(mfrow = c(1,2))
+plot(house_model$fitted.values, house_model$residuals,
+     xlab = "fitted values", ylab = "residuals")
+abline(h = 0, col = "red")
+```
+
+Heteroscedasticity is present in the residuals, since they are not randomly scattered around the red line in the plot.
+
+
+## 2.4 check independence of observations
+
+Because each row represents a unique census tract (neighborhood) in the Boston area, there are no repeated observations from the same subject. Thus, each observation is independent of the others.
+
+
+## 2.5 Check multicollinearity
+```{r}
+vif(house_model)
+```
+
+All VIFs shown above are near 1, so multicollinearity is not present in the model.
+
+# 3. Assumption Violation Handling
+
+## 3.1 Apply appropriate transformations when assumptions are violated and document your approach to each violation
+
+According to last section, the homoscedasticity assumption is violated, so we need to use heteroskedasticity-Consistent (HC) Standard Errors to address heteroscedasticity.
+
+```{r}
+sandwich1 <- coeftest(house_model, vcov = vcovHC(house_model, type = 'HC3'))
+sandwich1
+```
+
+## 3.2 Compare models before and after corrections
+
+This is the model summary before correction:
+
+    Call:
+    lm(formula = MEDV ~ CRIM + RM + DIS + RAD, data = house_price)
+    
+    Residuals:
+       Min     1Q Median     3Q    Max 
+    -18.98  -3.01  -0.58   2.39  40.79 
+    
+    Coefficients:
+                Estimate Std. Error t value Pr(>|t|)    
+    (Intercept) -26.8623     2.6478  -10.15  < 2e-16 ***
+    CRIM         -0.1675     0.0412   -4.06 0.000056 ***
+    RM            8.2616     0.4035   20.48  < 2e-16 ***
+    DIS          -0.0802     0.1513   -0.53   0.5963    
+    RAD          -0.1693     0.0432   -3.92   0.0001 ***
+    ---
+    Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+    
+    Residual standard error: 6.15 on 501 degrees of freedom
+    Multiple R-squared:  0.556,	Adjusted R-squared:  0.553 
+    F-statistic:  157 on 4 and 501 DF,  p-value: <2e-16
+
+
+This is the model summary after correction: 
+
+    t test of coefficients:
+    
+                Estimate Std. Error t value Pr(>|t|)    
+    (Intercept) -26.8623     4.2381   -6.34  5.2e-10 ***
+    CRIM         -0.1675     0.0390   -4.29  2.1e-05 ***
+    RM            8.2616     0.6897   11.98  < 2e-16 ***
+    DIS          -0.0802     0.1102   -0.73   0.4673    
+    RAD          -0.1693     0.0537   -3.15   0.0017 ** 
+    ---
+    Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+In other words, after correction, RAD becomes less significant, and RM's standard error increases from 0.40 to 0.69.
+
+
+# 4. Variable Selection & Hypothesis Testing
+
+## 4.1 Implement at least two different variable selection techniques
+
+```{r}
+# Forward selection
+null <- lm(MEDV ~ 1, data = house_price)
+full <- lm(MEDV ~ ., data = house_price)
+n <- nrow(house_price)
+
+forward_model <- stats::step(null, 
+                      scope = list(lower = null, upper = full),
+                      direction = "forward", 
+                      k = log(n))
+```
+
+```{r}
+# Backward selection
+backward_model <- stats::step(full, 
+                      scope = list(lower = null, upper = full),
+                      direction = "backward", 
+                      k = log(n))
+```
+
+## 4.2 Perform hypothesis tests on coefficients
+
+I will use the coefficients in the back selection model as the example.
+
+```{r}
+par(mfrow = c(1,2))
+plot(backward_model$fitted.values, backward_model$residuals,
+     xlab = "fitted values", ylab = "residuals")
+abline(h = 0, col = "red")
+```
+
+As we can see from the plot, heteroscedasticity is present in the model, which prompts us to use the robust standard errors for hypothesis testing of coefficients.
+
+```{r}
+sandwich2 <- coeftest(backward_model, vcov = vcovHC(backward_model, type = 'HC3'))
+sandwich2
+```
+
+As we can see from the summary above, all coefficients have a p-value smaller than 0.05. Therefore, we reject the null hypothesis that the coefficient is 0 for all of the coefficients in the backward_model.
+
+## 4.3 Assess model performance with metrics (R², adjusted R², RMSE, etc.)
+
+```{r}
+summary(forward_model)
+summary(backward_model)
+```
+```{r}
+AIC(forward_model)
+AIC(backward_model)
+BIC(forward_model)
+BIC(backward_model)
+```
+
+Based on the statistics above, backward_model should be preferred, as it has a higher r-squared and adjusted r-squared as well as a lower AIC and BIC than forward_model.
+
+    
+## 4.4 Validate your model using appropriate cross-validation techniques
+
+```{r}
+control <- trainControl(method = "cv", number = 10)
+model_cv <- train(MEDV ~ CRIM + ZN + CHAS + NOX + RM + DIS + RAD + 
+    TAX + PTRATIO + B + LSTAT, data = house_price,
+                  method = "lm",
+                  trControl = control)
+print(model_cv)
+```
+
+For the backward_model, the 10-fold cross-validated RMSE is 4.764, which means the model predicts median housing values (MEDV) with an average error of about $4,764. An R² of 0.743 suggests that about 74.3% of the variance in MEDV is explained by the predictors. The model generalizes relatively well to new data.
+
+
+# 5. Feature Impact Analysis
+
+## 5.1 Quantify and interpret the impact of each feature on the target
+
+From ##4.2, we have the following:
+
+    t test of coefficients:
+    
+                 Estimate Std. Error t value Pr(>|t|)    
+    (Intercept)  36.34115    8.11202    4.48  9.3e-06 ***
+    CRIM         -0.10841    0.03385   -3.20  0.00145 ** 
+    ZN            0.04584    0.01381    3.32  0.00097 ***
+    CHAS1         2.71872    1.34555    2.02  0.04387 *  
+    NOX         -17.37602    3.41854   -5.08  5.3e-07 ***
+    RM            3.80158    0.82183    4.63  4.8e-06 ***
+    DIS          -1.49271    0.22774   -6.55  1.4e-10 ***
+    RAD           0.29961    0.06350    4.72  3.1e-06 ***
+    TAX          -0.01178    0.00293   -4.01  6.9e-05 ***
+    PTRATIO      -0.94652    0.11528   -8.21  1.9e-15 ***
+    B             0.00929    0.00276    3.36  0.00083 ***
+    LSTAT        -0.52255    0.08827   -5.92  6.0e-09 ***
+    ---
+    Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Due to the statistical significance of all variables in the backward_model, I will pick two variables to interpret. 
+
+1) The estimate for NOX is -17.376, indicating that holding everything else constant, a 1-unit increase in nitric oxides concentration (parts per 10 million) is associated with a $17,376 decrease in the expected median value of owner-occupied homes.
+
+2) The estimate for CHAS1 is 2.719, indicating that holding everything else constant, being a census tract bounding the Charles River is associated with a $2,719 increase in the expected median value of owner-occupied homes.
+
+## 5.2 Provide confidence intervals for significant coefficients
+
+Due to the statistical significance of all variables in the backward_model, I will calculate the confidence interval for two of the significant coefficients. 
+
+```{r}
+t_star = qt((1-0.95)/2, df = 494, lower = F)
+b1 = sandwich2["NOX", "Estimate"]
+se1 = sandwich2["NOX", "Std. Error"]
+lb1 = b1 - t_star*se1
+ub1 = b1 + t_star*se1
+lb1
+ub1
+
+b2 = sandwich2["CHAS1", "Estimate"]
+se2 = sandwich2["CHAS1", "Std. Error"]
+lb2 = b2 - t_star*se2
+ub2 = b2 + t_star*se2
+lb2
+ub2
+```
+
+
+## 5.3 Explain the practical significance of your findings in the context of the dataset
+
+In the first half of the project, I investigated the relationship between the target variable median value of owner-occupied homes and the predictors per capita crime rate, average number of rooms per dwelling, weighted distances to five Boston employment centres, and index of accessibility to radial highways. I found that crime rate and accessibility to highway are significantly negatively associated with home values, while number of rooms is significantly positively associated with home values. In the second half of the project, I employed forward selection and backward selection to pick out the best model to predict housing prices in Boston. 
+
+
+#### Deliverables
+
+GitHub Repository containing:
+
+* All code (well-documented Rmd files)
+* README.md with clear instructions on how to run your analysis
+* Data folder (or instructions for accessing the data)
+* Requirements.txt or environment.yml file
+
+
+#### Final Report (PDF) containing:
+
+* Introduction: dataset description and problem statement
+* Methodology: techniques used and justification
+* Results: findings from your analysis
+* Discussion: interpretation of results and limitations
+* Conclusion: summary and potential future work
+* References: cite all sources used
+
+
+## Evaluation Criteria
+Your project will be evaluated based on:
+
+* Correctness of statistical analysis and procedures
+* Proper handling of regression assumptions
+* Quality of variable selection and hypothesis testing
+* Clarity of interpretation and insights
+* Organization and documentation of code
+* Professional presentation of findings
