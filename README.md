@@ -1,4 +1,4 @@
-# BTRY_6020
+# BTRY6020 Final Project
 
 ## 1. Overview
 This repository hosts code snippets of analysis and data for Rujia Xie's Final Project for BTRY 6020 in Spring 2025.
