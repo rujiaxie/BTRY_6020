@@ -193,7 +193,7 @@ This is the model summary after correction:
 sandwich1
 ```
 
-#####In other words, after correction, RAD becomes less significant, and RM's standard error increases from 0.40 to 0.69.
+In other words, after correction, RAD becomes less significant (but still significant). RM's standard error (SE) increases from 0.41 to 0.68, while DIS_log's SE decreases from 0.63 to 0.60.
 
 
 # 4. Variable Selection & Hypothesis Testing
