@@ -1,7 +1,7 @@
 ---
 title: "Final Project"
 author: "Rujia Xie"
-date: "`r Sys.Date()`"
+date: "May 14, 2025"
 output:
   pdf_document: default
   html_document: default
@@ -78,33 +78,49 @@ describe(house_price)
 
 ## 1.4 Visualization of distributions and relationships
 ```{r}
-hist(house_price$MEDV, breaks = 30, main = "Histogram of Median Value of Homes")
-hist(house_price$CRIM, breaks = 30, main = "Histogram of Per Capita Crime Rate")
-hist(house_price$RM, breaks = 30, main = "Histogram of Rooms per Dwelling")
-hist(house_price$DIS, breaks = 30, main = "Histogram of Distance to Employment Centers")
-hist(house_price$RAD, breaks = 30, main = "Histogram of Accessibility to Highways")
+hist(house_price$MEDV, breaks = 30, main = "Figure 1a. Histogram of Median Value of Homes")
+hist(house_price$CRIM, breaks = 30, main = "Figure 1b. Histogram of Per Capita Crime Rate")
+hist(house_price$RM, breaks = 30, main = "Figure 1c. Histogram of Rooms per Dwelling")
+hist(house_price$DIS, breaks = 30, main = "Figure 1d. Histogram of Distance to Employment Centers")
+hist(house_price$RAD, breaks = 30, main = "Figure 1e. Histogram of Accessibility to Highways")
 ```
 
-In the following correlation matrix, a correlation coefficient was shown in each cell.A red filling in the cell indicated a negative correlation, and a blue filling indicated a positive correlation. The P value for each correlation was also calculated.Correlations with p>.05 were crossed out in the matrix.
+Figures 1b and 1d indicate that CRIM and DIS are skewed to the right, which requires log transformation. Figure 1e presents the bimodal distribution of RAD, so it will be converted to a categorical variable with two levels: "low" (when $RAD \leq 15$) and "high" (when $RAD > 15$). Figures 2a-c present the distribution of the three transformed variables.
 
 ```{r}
-house_subset <- house_price [c(1, 6, 8, 9, 14)]
+house_price$RAD_cat <- ifelse(house_price$RAD <= 15, "low", "high")
+house_price$CRIM_log <- log(house_price$CRIM)
+house_price$DIS_log <- log(house_price$DIS)
+
+hist(house_price$CRIM_log, breaks = 30, main = "Figure 2a. Histogram of Log(Per Capita Crime Rate)")
+hist(log(house_price$DIS), breaks = 30, main = "Figure 2b. Histogram of Log(Distance to Employment Centers)")
+barplot(table(house_price$RAD_cat), main = "Figure 2c. Bar Chart of Categorical RAD")
+```
+
+Since there are multiple predictors in the model, a heat map was drawn to check for multicollinearity among the outcome and continuous predictors. A red filling in the cell indicated a negative correlation, and a blue filling indicated a positive correlation. The P value for each correlation was also calculated.Correlations with p>.05 were crossed out in the matrix.
+
+```{r}
+house_subset <- house_price [c(14, 6, 16, 17 )]
 house_correlation <-cor(house_subset, method="spearman", 
                            use="pairwise.complete.obs")
 
 
 pmatrix <- cor.mtest(house_subset, conf.level = .95)
-corrplot(house_correlation, p.mat = pmatrix$p, sig.level = .05,
-         insig = "pch", pch.cex = 3, pch.col = "red", type = "lower",
-         method="color", addCoef.col = "black", number.cex = 1.2, 
-         tl.cex = 1.2, tl.srt = 45, tl.col = "black")
+corrplot(title = "Figure 3. Heat Map of Predictors",
+         house_correlation, p.mat = pmatrix$p, sig.level = .05,
+         insig = "pch", pch.cex = 1.5, pch.col = "red", type = "lower",
+         method="color", addCoef.col = "black", number.cex = 0.8, 
+         tl.cex = 0.8, tl.srt = 45, tl.col = "black")
 ```
+
+As shown in Figure 3, CRIM_log and DIS_log are significantly correlated with a coefficient of -0.74. Thus, CRIM_log was removed from the model.
+
 
 # 2. Regression Assumptions Verification
 
 ```{r}
 # Run the fitted linear regression model
-house_model <- lm(MEDV ~ CRIM + RM + DIS + RAD,
+house_model <- lm(MEDV ~ RM + DIS_log + RAD_cat,
            data = house_price)
 summary(house_model)
 ```
@@ -112,7 +128,8 @@ summary(house_model)
 ## 2.1 Linearity assessment
 ```{r}
 plot(house_model$fitted.values, house_price$MEDV,
-     xlab = "fitted values", ylab = "observed values")
+     xlab = "fitted values", ylab = "observed values",
+     main = "Figure 4. Linearity Check")
 abline(a = 0, b = 1, col = "red")
 ```
 
@@ -121,7 +138,7 @@ Majority of the observations follow a linear trend.
 
 ## 2.2 Normality of residuals
 ```{r}
-qqnorm(house_model$residuals)
+qqnorm(house_model$residuals, main = "Figure 5. Normality of Residuals")
 qqline(house_model$residuals, col = "red")
 ```
 
@@ -130,9 +147,9 @@ Residuals of most observations follow a normal distribution, although outliers a
 
 ## 2.3 Check homoscedasticity (constant variance of residuals)
 ```{r}
-par(mfrow = c(1,2))
 plot(house_model$fitted.values, house_model$residuals,
-     xlab = "fitted values", ylab = "residuals")
+     xlab = "fitted values", ylab = "residuals",
+     main = "Figure 6. Homoscedasticity Check")
 abline(h = 0, col = "red")
 ```
 
@@ -155,7 +172,7 @@ All VIFs shown above are near 1, so multicollinearity is not present in the mode
 
 ## 3.1 Apply appropriate transformations when assumptions are violated and document your approach to each violation
 
-According to last section, the homoscedasticity assumption is violated, so we need to use heteroskedasticity-Consistent (HC) Standard Errors to address heteroscedasticity.
+According to last section, the homoscedasticity assumption is violated, so we need to use heteroscedasticity-Consistent (HC) Standard Errors to address heteroscedasticity.
 
 ```{r}
 sandwich1 <- coeftest(house_model, vcov = vcovHC(house_model, type = 'HC3'))
@@ -166,53 +183,29 @@ sandwich1
 
 This is the model summary before correction:
 
-    Call:
-    lm(formula = MEDV ~ CRIM + RM + DIS + RAD, data = house_price)
-    
-    Residuals:
-       Min     1Q Median     3Q    Max 
-    -18.98  -3.01  -0.58   2.39  40.79 
-    
-    Coefficients:
-                Estimate Std. Error t value Pr(>|t|)    
-    (Intercept) -26.8623     2.6478  -10.15  < 2e-16 ***
-    CRIM         -0.1675     0.0412   -4.06 0.000056 ***
-    RM            8.2616     0.4035   20.48  < 2e-16 ***
-    DIS          -0.0802     0.1513   -0.53   0.5963    
-    RAD          -0.1693     0.0432   -3.92   0.0001 ***
-    ---
-    Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
-    
-    Residual standard error: 6.15 on 501 degrees of freedom
-    Multiple R-squared:  0.556,	Adjusted R-squared:  0.553 
-    F-statistic:  157 on 4 and 501 DF,  p-value: <2e-16
-
+```{r}
+summary(house_model)
+```
 
 This is the model summary after correction: 
 
-    t test of coefficients:
-    
-                Estimate Std. Error t value Pr(>|t|)    
-    (Intercept) -26.8623     4.2381   -6.34  5.2e-10 ***
-    CRIM         -0.1675     0.0390   -4.29  2.1e-05 ***
-    RM            8.2616     0.6897   11.98  < 2e-16 ***
-    DIS          -0.0802     0.1102   -0.73   0.4673    
-    RAD          -0.1693     0.0537   -3.15   0.0017 ** 
-    ---
-    Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+```{r}
+sandwich1
+```
 
-
-In other words, after correction, RAD becomes less significant, and RM's standard error increases from 0.40 to 0.69.
+#####In other words, after correction, RAD becomes less significant, and RM's standard error increases from 0.40 to 0.69.
 
 
 # 4. Variable Selection & Hypothesis Testing
 
 ## 4.1 Implement at least two different variable selection techniques
 
+Step-wise regression was employed to find the model that accurately predicts the median value of owner-occupied homes (MEDV) in Boston, MA. Both forward and backward selection were conducted. We subset the house_price dataset so that the raw forms of the three transformed variables will not be included in the model.
+
 ```{r}
 # Forward selection
-null <- lm(MEDV ~ 1, data = house_price)
-full <- lm(MEDV ~ ., data = house_price)
+null <- lm(MEDV ~ 1, data = house_price[-c(1, 8, 9)])
+full <- lm(MEDV ~ ., data = house_price[-c(1, 8, 9)])
 n <- nrow(house_price)
 
 forward_model <- stats::step(null, 
@@ -231,12 +224,12 @@ backward_model <- stats::step(full,
 
 ## 4.2 Perform hypothesis tests on coefficients
 
-I will use the coefficients in the back selection model as the example.
+I will use the coefficients in the backward selection model as the example.
 
 ```{r}
-par(mfrow = c(1,2))
 plot(backward_model$fitted.values, backward_model$residuals,
-     xlab = "fitted values", ylab = "residuals")
+     xlab = "fitted values", ylab = "residuals",
+     main = "Figure 7. Homoscedasticity Check for Backward Selection Model")
 abline(h = 0, col = "red")
 ```
 
@@ -269,52 +262,86 @@ Based on the statistics above, backward_model should be preferred, as it has a h
 
 ```{r}
 control <- trainControl(method = "cv", number = 10)
-model_cv <- train(MEDV ~ CRIM + ZN + CHAS + NOX + RM + DIS + RAD + 
-    TAX + PTRATIO + B + LSTAT, data = house_price,
+model_backward_cv <- train(MEDV ~ CHAS + NOX + RM + TAX + PTRATIO + B + LSTAT + 
+    RAD_cat + DIS_log, data = house_price[-c(1, 8, 9)],
                   method = "lm",
                   trControl = control)
-print(model_cv)
+print(model_backward_cv)
 ```
 
-For the backward_model, the 10-fold cross-validated RMSE is 4.764, which means the model predicts median housing values (MEDV) with an average error of about $4,764. An R² of 0.743 suggests that about 74.3% of the variance in MEDV is explained by the predictors. The model generalizes relatively well to new data.
+For the backward_model, the 10-fold cross-validated RMSE is 4.729, which means the model predicts median housing values (MEDV) with an average error of about $4,729. An R² of 0.738 suggests that about 73.8% of the variance in MEDV is explained by the predictors. The model generalizes relatively well to new data.
 
 
 # 5. Feature Impact Analysis
 
 ## 5.1 Quantify and interpret the impact of each feature on the target
 
-From ##4.2, we have the following:
+For the linear regression model generated for the first objective, we have the following coefficients and interpretations:
 
-    t test of coefficients:
-    
-                 Estimate Std. Error t value Pr(>|t|)    
-    (Intercept)  36.34115    8.11202    4.48  9.3e-06 ***
-    CRIM         -0.10841    0.03385   -3.20  0.00145 ** 
-    ZN            0.04584    0.01381    3.32  0.00097 ***
-    CHAS1         2.71872    1.34555    2.02  0.04387 *  
-    NOX         -17.37602    3.41854   -5.08  5.3e-07 ***
-    RM            3.80158    0.82183    4.63  4.8e-06 ***
-    DIS          -1.49271    0.22774   -6.55  1.4e-10 ***
-    RAD           0.29961    0.06350    4.72  3.1e-06 ***
-    TAX          -0.01178    0.00293   -4.01  6.9e-05 ***
-    PTRATIO      -0.94652    0.11528   -8.21  1.9e-15 ***
-    B             0.00929    0.00276    3.36  0.00083 ***
-    LSTAT        -0.52255    0.08827   -5.92  6.0e-09 ***
-    ---
-    Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+-   Intercept: -33.9432 (p \< 0.001)
 
-Due to the statistical significance of all variables in the backward_model, I will pick two variables to interpret. 
+    The expected median value of owner-occupied homes when RM = 0, DIS_log = 0, and RAD_cat = "high" is -\$33,943.2, which serves as a baseline value.
 
-1) The estimate for NOX is -17.376, indicating that holding everything else constant, a 1-unit increase in nitric oxides concentration (parts per 10 million) is associated with a $17,376 decrease in the expected median value of owner-occupied homes.
+-   RM: 8.3992 (p \< 0.001)
 
-2) The estimate for CHAS1 is 2.719, indicating that holding everything else constant, being a census tract bounding the Charles River is associated with a $2,719 increase in the expected median value of owner-occupied homes.
+    Holding DIS_log and RAD_cat constant, a 1-unit increase in the average number of rooms per dwelling is associated with a \$8,399.2 increase in the expected median value of owner-occupied homes. This association is statistically significant.
+
+-   DIS_log: -0.3439 (p = 0.57)
+
+    The log of weighted distance to five Boston employment centers shows a non-significant effect on the expected median value of owner-occupied homes.
+
+-   RAD_cat: 5.5449 (p \< 0.001)
+
+    Holding RM and DIS_log constant, a low index of accessibility to radial highways ($RAD \leq 15$) is associated with a \$5,544.9 increase in the expected median value of owner-occupied homes compared to a high index of accessibility to radial highways (RAD \> 15). This association is statistically significant.
+
+For the predictive model generated for the second objective, we have the following coefficients and interpretations:
+
+-   Intercept: 48.8179 (p \< 0.001)
+
+    The expected median value of owner-occupied homes (in \$1,000) when all predictors = 0, which serves as a baseline value.
+
+-   CHAS: 2.9056 (p = 0.02)
+
+    Holding everything else constant, being near the Charles River (CHAS = 1) is associated with a \$2,905.6 increase in the expected median value of owner-occupied homes. This association is statistically significant.
+
+-   NOX: -24.2414 (p \< 0.001)
+
+    Holding everything else constant, a 1-unit increase in the Nitric Oxide concentration (parts per 10 million) is associated with a \$24,241.4 decrease in the expected median value of owner-occupied homes. This association is statistically significant.
+
+-   RM: 4.0350 (p \< 0.001)
+
+    Holding everything else constant, a 1-unit increase in the average number of rooms per dwelling is associated with a \$4,035.0 increase in the expected median value of owner-occupied homes. This association is statistically significant.
+
+-   TAX: -0.0108 (p \< 0.001)
+
+    Holding everything else constant, a 1-unit increase in the full-value property-tax rate per \$10,000 is associated with a \$10.8 decrease in the expected median value of owner-occupied homes. This association is statistically significant.
+
+-   PTRATIO: -1.0435 (p \< 0.001)
+
+    Holding everything else constant, a 1-unit increase in the pupil-teacher ratio is associated with a \$1,043.5 decrease in the expected median value of owner-occupied homes. This association is statistically significant.
+
+-   B: 0.0097 (p \< 0.001)
+
+    Holding everything else constant, a 1-unit increase in the parabolically transformed value of African American resident proportion (the formula is 1000(Bk - 0.63)\^2, where Bk is the proportion of African American residents) is associated with a \$9.7 increase in the expected median value of owner-occupied homes. This association is statistically significant.
+
+-   LSTAT: -0.5752 (p \< 0.001)
+
+    Holding everything else constant, a 1-unit increase in the percentage of lower status of the population is associated with a \$575.2.0 decrease in the expected median value of owner-occupied homes. This association is statistically significant.
+
+-   RAD_cat: -4.3153 (p \< 0.001)
+
+    Holding everything else constant, a low index of accessibility to radial highways ($RAD \leq 15$) is associated with a \$4,315.3 decrease in the expected median value of owner-occupied homes compared to a high index of accessibility to radial highways ($RAD > 15$). This association is statistically significant.
+
+-   DIS_log: -6.5110 (p \< 0.001)
+
+    Holding everything else constant, a 1% increase in the weighted distance to five Boston employment centers is associated with a \$65.11 decrease in the expected median value of owner-occupied homes. This association is statistically significant.
 
 ## 5.2 Provide confidence intervals for significant coefficients
 
 Due to the statistical significance of all variables in the backward_model, I will calculate the confidence interval for two of the significant coefficients. 
 
 ```{r}
-t_star = qt((1-0.95)/2, df = 494, lower = F)
+t_star = qt((1-0.95)/2, df = 496, lower = F)
 b1 = sandwich2["NOX", "Estimate"]
 se1 = sandwich2["NOX", "Std. Error"]
 lb1 = b1 - t_star*se1
@@ -333,7 +360,9 @@ ub2
 
 ## 5.3 Explain the practical significance of your findings in the context of the dataset
 
-In the first half of the project, I investigated the relationship between the target variable median value of owner-occupied homes and the predictors per capita crime rate, average number of rooms per dwelling, weighted distances to five Boston employment centres, and index of accessibility to radial highways. I found that crime rate and accessibility to highway are significantly negatively associated with home values, while number of rooms is significantly positively associated with home values. In the second half of the project, I employed forward selection and backward selection to pick out the best model to predict housing prices in Boston. 
+This project does two things. First, it investigated the relationship between the median value of owner-occupied homes (MEDV) and the average number of rooms per dwelling (RM), the weighted distance to five Boston employment centers (DIS), and the index of accessibility to radial highways (RAD). Then, the project developed a predictive model that estimates the median value of owner-occupied homes (MEDV) in Boston, MA, using step-wise regression.
+
+According to the first model, the median value of homes is positively associated with the number of rooms and negatively associated with accessibility. In the more comprehensive predictive model, the median value of homes is higher near the Charles River, with more rooms, and slightly with a higher parabolically transformed value of African American resident proportion. Conversely, home values decline with increased NOx pollution, higher property taxes, greater pupil-teacher ratios, a higher percentage of lower-status residents, and greater (log-transformed) distances from employment centers. While these findings offer insights into Boston's housing dynamics for policymakers and real estate professionals, it’s critical that such models are applied thoughtfully to avoid reinforcing systemic inequities.
 
 
 #### Deliverables
