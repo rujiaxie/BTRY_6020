@@ -11,7 +11,7 @@ This repository hosts code snippets of analysis and data for Rujia Xie's Final P
 - `Final_Report.pdf` is the Final Report of the project.
   
 - *Analysis/*
-	- `Final_Project.Rmd` contains the full R code used for statistical and spatial analysis in this project.
+	- `Final_Project.Rmd` and `Final_Project.pdf` contain the full R code used for statistical and spatial analysis in this project.
 
 - *Data/*
 	- `Boston-house-price-data.csv` is the csv file with all the CT-level variables that are used in R for analysis. 
