@@ -1,7 +1,7 @@
 # BTRY6020 Final Project
 
 ## 1. Overview
-This repository hosts code snippets of analysis and data for Rujia Xie's Final Project for BTRY 6020 in Spring 2025.
+This repository hosts the final report, code snippets of analysis, and source data for Rujia Xie's Final Project for BTRY 6020 in Spring 2025.
 
 - For questions, please contact Rujia Xie (rujiaxie5@gmail.com)
 
